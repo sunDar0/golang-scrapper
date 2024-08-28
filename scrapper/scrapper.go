@@ -66,11 +66,11 @@ func writeJob(searchKeyword string, jobs []ExtractJob) {
 			done <- []string{jobDetailUrl + job.id, job.company, job.title, job.workPlace, job.career, strings.Join(job.summary, " ")}
 		}(job)
 	}
-
+	var jobSlice [][]string
 	for i := 0; i < len(jobs); i++ {
-
-		w.Write(<-done)
+		jobSlice = append(jobSlice, <-done)
 	}
+	w.WriteAll(jobSlice)
 
 	log.Println("ended....:", len(jobs))
 
