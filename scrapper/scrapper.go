@@ -2,7 +2,6 @@ package scrapper
 
 import (
 	"encoding/csv"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/sunDar0/learngo/common"
 )
 
 var scrappingBaseUrl string = "https://www.saramin.co.kr/zf_user/jobs/list/job-category?"
@@ -44,25 +44,20 @@ func Scrape(searchKeyword string) {
 
 	writeJob(searchKeyword, jobs)
 	end := time.Since(start)
-	fmt.Println("ended....:", end)
-}
-
-// CleanString string sanitize
-func CleanString(txt string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(txt)), " ")
+	log.Println("duration :", end)
 }
 
 func writeJob(searchKeyword string, jobs []ExtractJob) {
 
 	file, err := os.Create(searchKeyword + "_jobs.csv")
-	checkErr(err)
+	common.CheckErr(err)
 	file.WriteString("\xEF\xBB\xBF")
 
 	w := csv.NewWriter(file)
 
 	headers := []string{"Link", "Company", "Title", "WorkPlace", "Career", "summary"}
 	wErr := w.Write(headers)
-	checkErr(wErr)
+	common.CheckErr(wErr)
 
 	done := make(chan []string)
 
@@ -77,13 +72,8 @@ func writeJob(searchKeyword string, jobs []ExtractJob) {
 		w.Write(<-done)
 	}
 
-	// for _, job := range jobs {
-	// 	jobSlice := []string{jobDetailUrl + job.id, job.company, job.title, job.workPlace, job.career, strings.Join(job.summary, " ")}
-	// 	wErr := w.Write(jobSlice)
-	// 	checkErr(wErr)
-	// }
+	log.Println("ended....:", len(jobs))
 
-	fmt.Println("Done. count", len(jobs))
 	defer w.Flush()
 	defer file.Close()
 }
@@ -91,13 +81,13 @@ func writeJob(searchKeyword string, jobs []ExtractJob) {
 func getPageByPageNum(pageNum int, searchKeyword string, extractJobChannel chan<- []ExtractJob) {
 	c := make(chan ExtractJob)
 	pageUrl := scrappingBaseUrl + "page=" + strconv.Itoa(pageNum) + "&cat_kewd=84%2C87%2C2232&searchType=search&searchword=" + searchKeyword + "&search_optional_item=y&search_done=y&panel_count=y&preview=y&isAjaxRequest=0&page_count=50&sort=RL&type=job-category&is_param=1&isSearchResultEmpty=1&isSectionHome=0&searchParamCount=2#searchTitle"
-	fmt.Println("Request page :", pageUrl)
+	log.Println("Request page :", pageUrl)
 	res, err := http.Get(pageUrl)
-	checkErr(err)
-	checkCode(res)
+	common.CheckErr(err)
+	common.CheckCode(res)
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
-	checkErr(err)
+	common.CheckErr(err)
 	var extractJobs []ExtractJob
 	rawJobs := doc.Find(".list_recruiting > div.list_body > .list_item")
 	rawJobs.Each(func(i int, card *goquery.Selection) {
@@ -126,15 +116,15 @@ func makeExtractJob(card *goquery.Selection, c chan<- ExtractJob) {
 
 	var sectors []string
 	card.Find(".box_item > .notification_info > .job_meta > .job_sector>span").Each(func(i int, sector *goquery.Selection) {
-		trimSector := CleanString(sector.Text())
+		trimSector := common.CleanString(sector.Text())
 		sectors = append(sectors, trimSector)
 
 	})
 
 	extractJob := ExtractJob{
 		id:        strings.Split(recIdx, "-")[1],
-		company:   CleanString(companyNm),
-		title:     CleanString(title),
+		company:   common.CleanString(companyNm),
+		title:     common.CleanString(title),
 		workPlace: workPlace,
 		career:    career,
 		summary:   sectors,
@@ -145,11 +135,11 @@ func makeExtractJob(card *goquery.Selection, c chan<- ExtractJob) {
 func getTotalPageCount(startPage int, searchKeyword string) int {
 
 	res, err := http.Get(scrappingBaseUrl + "page=" + strconv.Itoa(startPage) + "&cat_kewd=84%2C87%2C2232&searchType=search&searchword=" + searchKeyword + "&search_optional_item=y&search_done=y&panel_count=y&preview=y&isAjaxRequest=0&page_count=50&sort=RL&type=job-category&is_param=1&isSearchResultEmpty=1&isSectionHome=0&searchParamCount=2#searchTitle")
-	checkErr(err)
-	checkCode(res)
+	common.CheckErr(err)
+	common.CheckCode(res)
 
 	doc, err := goquery.NewDocumentFromReader(res.Body)
-	checkErr(err)
+	common.CheckErr(err)
 	isNextButton := false
 	buttons := doc.Find(".PageBox > button")
 	buttons.Each(func(i int, button *goquery.Selection) {
@@ -164,15 +154,4 @@ func getTotalPageCount(startPage int, searchKeyword string) int {
 		return buttons.Length()
 	}
 	return getTotalPageCount(buttons.Length()+1, searchKeyword) + buttons.Length()
-}
-func checkErr(err error) {
-	if err != nil {
-		log.Fatalln(err)
-	}
-}
-
-func checkCode(res *http.Response) {
-	if res.StatusCode != 200 {
-		log.Fatalln("Request failed with status:", res.StatusCode)
-	}
 }
